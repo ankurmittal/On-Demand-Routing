@@ -7,7 +7,7 @@ CC = gcc
 
 LIBS =  /home/courses/cse533/Stevens/unpv13e/libunp.a
 
-FLAGS = -g -O2
+FLAGS = -g -O2 -I/home/courses/cse533/Stevens/unpv13e/lib
 
 all: client_${LOGIN}  server_${LOGIN} ODR_${LOGIN} prhwaddrs
 	
@@ -33,7 +33,7 @@ server_${LOGIN} : server.o
 	${CC} -o $@ server.o ${LIBS}
 
 odr.o : odr.c
-	${CC} ${FLAGS} -c odr.c
+	${CC} ${FLAGS} -DPROTO=${ID} -c odr.c
 
 ODR_${LOGIN} : odr.o get_hw_addrs.o
 	${CC} -o $@ odr.o get_hw_addrs.o ${LIBS}

@@ -1,4 +1,5 @@
 #include	"hw_addrs.h"
+#include <stdlib.h>
 
 int
 main (int argc, char **argv)

@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <sys/socket.h>
+#include "unp.h"
 
 #define	IF_NAME		16	/* same as IFNAMSIZ    in <net/if.h> */
 #define	IF_HADDR	 6	/* same as IFHWADDRLEN in <net/if.h> */
