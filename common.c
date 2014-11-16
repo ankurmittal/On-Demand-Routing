@@ -10,13 +10,13 @@ int msg_send(int sockfd, char *ip, int port, char *msg, int flag)
     bzero(&msg_content, sizeof(msg_content));
 
     strcpy(msg_content.ip, ip);
-    strcpy(msg_content.msg, ip);
+    strcpy(msg_content.msg, msg);
     msg_content.port = port;
     msg_content.flag = flag;
 
     odraddr.sun_family = AF_LOCAL;
-    strcpy(odraddr.sun_path, ODR_PATH);
     printf("ODR_PATH:%s\n", ODR_PATH);
+    strcpy(odraddr.sun_path, ODR_PATH);
     n = connect(sockfd, (SA *) &odraddr, sizeof(odraddr));
     if(n < 0)
     {

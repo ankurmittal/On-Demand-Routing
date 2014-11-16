@@ -1,6 +1,5 @@
+include var.mk
 
-LOGIN = gdugar
-ID = 109335678
 CC = gcc
 
 
@@ -27,10 +26,10 @@ server.o : server.c common.h
 	${CC} ${FLAGS} -c server.c
 
 client_${LOGIN} : client.o common.o
-	${CC} -o $@ client.o common.o ${LIBS}
+	${CC} -g -o $@ client.o common.o ${LIBS}
 
 server_${LOGIN} : server.o common.o
-	${CC} -o $@ server.o common.o ${LIBS}
+	${CC} -g -o $@ server.o common.o ${LIBS}
 
 odr.o : odr.c common.h
 	${CC} ${FLAGS} -DPROTO=${ID} -c odr.c

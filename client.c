@@ -5,9 +5,9 @@ int main()
     int sockfd;
     struct sockaddr_un cliaddr, servaddr;
     char input[5];
-    char *c;
+    char *c = "c";
     int valid = 0;
-    char *vm;
+    char vm[4];
     char hostname[10];
     struct hostent *ent;
     int i = 0;
@@ -27,15 +27,14 @@ int main()
     //while (1) {
         printf("\nEnter vm number (1-10): ");
         scanf("%s", vm);
-        if((ent = gethostbyname(vm)) == NULL) {
+        if((ent = gethostbyname("vm2")) == NULL) {
             perror("gethostbyname returned NULL");
             exit(1);
         }
         inet_ntop(PF_INET, ent->h_addr_list[0], buffer, sizeof(buffer));
         printf("%s\n",buffer);
-        printf("\nclient at node %s sending request to server at %s", hostname, vm);
+        printf("\nclient at node %s sending request to server at %s\n", hostname, vm);
         msg_send(sockfd, buffer, 7001, c, 0);
-        sleep(3);
    // }
     unlink(cliaddr.sun_path);
     exit(0);

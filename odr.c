@@ -12,20 +12,11 @@ int main(int argc, char **argv)
     bzero(&odraddr, sizeof(odraddr));
     odraddr.sun_family = AF_LOCAL;
     strcpy(odraddr.sun_path, ODR_PATH);
+    printf("ODR path:%s\n", ODR_PATH);
     Bind(listenfd, (SA *) &odraddr, sizeof(odraddr));
-    Listen(listenfd, LISTENQ);
-    for ( ; ; ) {
-	clilen = sizeof(cliaddr);
-	if ( (connfd = accept(listenfd, (SA *) &cliaddr, &clilen)) < 0) {
-
-	    if (errno == EINTR)
-		continue; /* back to for() */
-	    else
-		err_sys("accept error");
-	}
-	break;
-    }
-    n = read(listenfd, &msg_content, sizeof(msg_content));
+    //Listen(listenfd, LISTENQ);
+    clilen = sizeof(cliaddr);
+    n = recvfrom(listenfd, &msg_content, sizeof(msg_content), 0, (SA*)&cliaddr, &clilen);
     printf("%d, %d, %s, %s\n", msg_content.port, msg_content.flag, msg_content.msg, msg_content.ip);
     printf("Cli sun_name:%s\n", cliaddr.sun_path);
 

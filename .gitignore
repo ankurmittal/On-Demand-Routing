@@ -3,3 +3,4 @@ client_*
 server_*
 ODR_*
 .*swp
+var.sh

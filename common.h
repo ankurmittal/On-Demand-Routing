@@ -2,8 +2,9 @@
 #define _COMMON_H
 
 #include "unp.h"
-#define STR(x) #x
-#define ODR_PATH "odr_fd_" STR(PROTO)
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+#define ODR_PATH "/tmp/odr_fd_" STR(PROTO)
 
 struct msg_rec {
     char msg[10];
