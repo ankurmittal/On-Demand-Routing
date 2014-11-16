@@ -20,22 +20,25 @@ get_hw_addrs.o: get_hw_addrs.c
 prhwaddrs.o: prhwaddrs.c
 	${CC} ${FLAGS} -c prhwaddrs.c
 
-client.o : client.c
+client.o : client.c common.h
 	${CC} ${FLAGS} -c client.c
 
-server.o : server.c
+server.o : server.c common.h
 	${CC} ${FLAGS} -c server.c
 
-client_${LOGIN} : client.o
+client_${LOGIN} : client.o common.o
 	${CC} -o $@ client.o ${LIBS}
 
-server_${LOGIN} : server.o
+server_${LOGIN} : server.o common.o
 	${CC} -o $@ server.o ${LIBS}
 
 odr.o : odr.c
 	${CC} ${FLAGS} -DPROTO=${ID} -c odr.c
 
-ODR_${LOGIN} : odr.o get_hw_addrs.o
+common.o : common.c common.h
+	${CC} ${FLAGS} -DPROTO=${ID} -c common.c
+
+ODR_${LOGIN} : odr.o get_hw_addrs.o common.o
 	${CC} -o $@ odr.o get_hw_addrs.o ${LIBS}
 clean:
 	rm prhwaddrs *.o client_${LOGIN} server_${LOGIN} ODR_${LOGIN}

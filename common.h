@@ -2,11 +2,20 @@
 #define _COMMON_H
 
 #include "unp.h"
+#define STR(x) #x
+#define ODR_PATH "odr_fd_" STR(PROTO)
 
 struct msg_rec {
     char msg[10];
     char ip[16];
     int port;
+};
+
+struct msg_send {
+    char ip[16];
+    int port;
+    char msg[10];
+    int flag;
 };
 
 int msg_send(int sockfd, char *ip, int port, char *msg, int flag);
