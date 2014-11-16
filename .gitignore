@@ -3,4 +3,6 @@ client_*
 server_*
 ODR_*
 .*swp
+.*swo
 var.sh
+var.mk
