@@ -5,7 +5,7 @@ int main()
     int sockfd, n;
     struct sockaddr_un servaddr;
     struct msg_rec *msg;
-    char vm[4], hostname[10], buffer[16], ts[30];
+    char vm[4], hostname[10], buffer[16], ts[30], client_hostname[10];
     struct hostent *ent;
     int client_port = 0;
     time_t ticks;
