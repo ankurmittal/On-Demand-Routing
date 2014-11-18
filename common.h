@@ -5,6 +5,8 @@
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 #define ODR_PATH "/tmp/odr_fd_" STR(PROTO)
+#define SERVER_PATH "/tmp/server_path_" STR(PROTO)
+#define SERVER_PORT 7005
 
 struct msg_rec {
     char msg[10];

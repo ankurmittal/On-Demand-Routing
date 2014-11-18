@@ -21,7 +21,7 @@ void getInput(char *result) {
 int main()
 {
     int sockfd;
-    struct sockaddr_un cliaddr, servaddr;
+    struct sockaddr_un cliaddr;
     struct msg_rec *msg;
     char *c = "c";
     char vm[4], hostname[10], buffer[16], data[50];
@@ -47,7 +47,7 @@ int main()
         inet_ntop(PF_INET, ent->h_addr_list[0], buffer, sizeof(buffer));
         printf("%s\n", buffer);
         printf("\nclient at node %s sending request to server at %s\n", hostname, vm);
-        msg_send(sockfd, buffer, 7001, c, 0);
+        msg_send(sockfd, buffer, SERVER_PORT, c, 0);
         //msg = msg_recv(sockfd);
         //printf("Received Msg: %s\n")msg->msg);
         //printf("Received IP: %s\n", msg->ip);
