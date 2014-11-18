@@ -2,6 +2,7 @@
 #define _COMMON_H
 
 #include "unp.h"
+#include <stdarg.h> 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 #define ODR_PATH "/tmp/odr_fd_" STR(PROTO)
@@ -23,5 +24,16 @@ struct msg_send {
 
 int msg_send(int sockfd, char *ip, int port, char *msg, int flag);
 struct msg_rec* msg_recv(int sockfd);
+
+static void printdebuginfo(const char *format, ...)
+{
+#ifdef NDEBUGINFO
+    return;
+#endif
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
 
 #endif
