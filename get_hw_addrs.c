@@ -92,7 +92,7 @@ Get_hw_addrs()
 	struct hwa_info	*hwa;
 
 	if ( (hwa = get_hw_addrs()) == NULL)
-		err_quit("get_hw_addrs error");
+		err_quit("Error in getting hardware addresses.");
 	return(hwa);
 }
 

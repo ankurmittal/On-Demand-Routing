@@ -37,7 +37,7 @@ odr.o : odr.c common.h
 common.o : common.c common.h
 	${CC} ${FLAGS} -DPROTO=${ID} -c common.c
 
-ODR_${LOGIN} : odr.o get_hw_addrs.o
+ODR_${LOGIN} : odr.o get_hw_addrs.o odr.h
 	${CC} -o $@ odr.o get_hw_addrs.o ${LIBS}
 clean:
 	rm prhwaddrs *.o client_${LOGIN} server_${LOGIN} ODR_${LOGIN}
