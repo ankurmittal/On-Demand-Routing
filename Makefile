@@ -31,13 +31,13 @@ client_${LOGIN} : client.o common.o
 server_${LOGIN} : server.o common.o
 	${CC} -g -o $@ server.o common.o ${LIBS}
 
-odr.o : odr.c common.h
+odr.o : odr.c common.h porttable.h odr.h
 	${CC} ${FLAGS} -DPROTO=${ID} -c odr.c
 
 common.o : common.c common.h
 	${CC} ${FLAGS} -DPROTO=${ID} -c common.c
 
-ODR_${LOGIN} : odr.o get_hw_addrs.o odr.h
+ODR_${LOGIN} : odr.o get_hw_addrs.o
 	${CC} -o $@ odr.o get_hw_addrs.o ${LIBS}
 clean:
 	rm prhwaddrs *.o client_${LOGIN} server_${LOGIN} ODR_${LOGIN}
