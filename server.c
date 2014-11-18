@@ -24,10 +24,15 @@ int main()
     Bind(sockfd, (SA *) &servaddr, sizeof(servaddr));
     
     //while (1) {
-        //msg = msg_recv(sockfd);
-        //printf("Received Msg: %s\n")msg->msg);
-        //printf("Received IP: %s\n", msg->ip);
-        //printf("Received Port: %d\n", msg->port);
+        msg = msg_recv(sockfd, 0);
+        if(msg == NULL) {
+            printf("timeout..!!\n");
+            exit(0);
+            //continue;
+        }
+        printf("Received Msg: %s\n", msg->msg);
+        printf("Received IP: %s\n", msg->ip);
+        printf("Received Port: %d\n", msg->port);
         client_port = msg->port;
         
         inet_pton(AF_INET, msg->ip, &ipv4addr);

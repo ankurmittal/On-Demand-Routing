@@ -48,10 +48,17 @@ int main()
         printf("%s\n", buffer);
         printf("\nclient at node %s sending request to server at %s\n", hostname, vm);
         n = msg_send(sockfd, buffer, SERVER_PORT, c, 0);
-        //msg = msg_recv(sockfd);
-        //printf("Received Msg: %s\n")msg->msg);
-        //printf("Received IP: %s\n", msg->ip);
-        //printf("Received Port: %d\n", msg->port);
+        msg = msg_recv(sockfd, 1);
+        if(msg == NULL) {
+            printf("timeout..!!\n");
+            
+            unlink(cliaddr.sun_path);
+            exit(0);
+            //continue;
+        }
+        printf("Received Msg: %s\n", msg->msg);
+        printf("Received IP: %s\n", msg->ip);
+        printf("Received Port: %d\n", msg->port);
    //}
     
     unlink(cliaddr.sun_path);

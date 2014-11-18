@@ -10,7 +10,7 @@
 #define SERVER_PORT 7005
 
 struct msg_rec {
-    char msg[10];
+    char msg[30];
     char ip[16];
     int port;
 };
@@ -18,12 +18,12 @@ struct msg_rec {
 struct msg_send {
     char ip[16];
     int port;
-    char msg[10];
+    char msg[30];
     int flag;
 };
 
 int msg_send(int sockfd, char *ip, int port, char *msg, int flag);
-struct msg_rec* msg_recv(int sockfd);
+struct msg_rec* msg_recv(int sockfd, int timeout);
 
 static void printdebuginfo(const char *format, ...)
 {
