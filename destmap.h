@@ -13,7 +13,7 @@ struct data_wrapper
 struct dest_map
 {
     unsigned long destip;
-    char dest_mac[6], src_mac[6];
+    char nexthop_mac[6], src_mac[6];
     int interface;
     uint32_t hop;
     long timestamp; //in millis

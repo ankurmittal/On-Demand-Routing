@@ -185,18 +185,22 @@ int sendframe(char *destmac, int interface, char *srcmac,
     struct sockaddr_ll socket_address;
     int n;
     /*buffer for ethernet frame*/
-    void* buffer = (void*)malloc(ETH_FRAME_LEN);
-
-    /*pointer to ethenet header*/
-    unsigned char* etherhead = buffer;
+    void* buffer;
 
     /*userdata in ethernet frame*/
-    void* data_p = buffer + 14;
+    void* data_p;
 
     /*another pointer to ethernet header*/
-    struct ethhdr *eh = (struct ethhdr *)etherhead;
+    struct ethhdr *eh;
+
+    int len = sizeof(struct ethhdr) + hdr_len + data_lenght;
 
     int send_result = 0;
+
+    buffer = (void*)malloc(len);
+    eh = buffer;
+
+    data_p = buffer + sizeof(struct ethhdr);
 
     printdebuginfo("Sending msg to %d\n", interface);
     /*prepare sockaddr_ll*/
