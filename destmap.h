@@ -24,7 +24,7 @@ struct dest_map
 static struct portentry *hdestmap = NULL, *tdestmap = NULL;
 
 //Will check sourceip and port no from odr_hdr, if they are same, just replace data, else insert new node
-void insert_data_dest_table(struct odr_hdr odr_hdr, char *data, unsigned long destip);
+void insert_data_dest_table(struct data_wrapper data_wrapper, unsigned long destip);
 
 // if entry is stale, mark resolved as 0 and return NULL, else return node
 // Also if map doesn't contain this destip, crate new node and add it and return NULL
