@@ -94,7 +94,8 @@ struct dest_map *get_dest_entry(unsigned long destip, long staleness) {
  * if destip not found, add the entry. if entry is updated or added,
  * return this entry else return null
  */
-struct dest_map *update_dest_map(unsigned long destip, char *dest_mac, int interface, uint32_t hop, unsigned long staleness) {
+struct dest_map *update_dest_map(unsigned long destip, char *dest_mac, char *src_mac, 
+    int interface, uint32_t hop, unsigned long staleness) {
     int found = 0;
     struct dest_map *temp = hdestmap, *result = NULL;
 
@@ -118,6 +119,7 @@ struct dest_map *update_dest_map(unsigned long destip, char *dest_mac, int inter
         bzero(newNode, sizeof(struct dest_map));
         newNode->destip = destip;
         memcpy(newNode->dest_mac, dest_mac, 6);
+        memcpy(newNode->src_mac, src_mac, 6);
         newNode->interface = interface;
         newNode->hop = hop;
         newNode->next = NULL;

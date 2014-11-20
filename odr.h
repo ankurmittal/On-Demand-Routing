@@ -12,6 +12,10 @@
 
 #include "hw_addrs.h"
 
+#define TYPE_RREQ 0
+#define TYPE_RREP 1
+#define TYPE_PAYLOAD 2
+
 struct interface_info 
 {
     char if_haddr[IF_HADDR];

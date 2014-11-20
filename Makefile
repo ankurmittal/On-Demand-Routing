@@ -39,7 +39,7 @@ destmap.o : destmap.c destmap.h
 	${CC} ${FLAGS} -c destmap.c
 
 ODR_${LOGIN} : odr.o get_hw_addrs.o destmap.o
-	${CC} -o $@ odr.o get_hw_addrs.o ${LIBS}
+	${CC} -o $@ odr.o get_hw_addrs.o destmap.o ${LIBS}
 clean:
 	rm prhwaddrs *.o client_${LOGIN} server_${LOGIN} ODR_${LOGIN}
 

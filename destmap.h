@@ -13,7 +13,7 @@ struct data_wrapper
 struct dest_map
 {
     unsigned long destip;
-    char dest_mac[6];
+    char dest_mac[6], src_mac[6];
     int interface;
     uint32_t hop;
     long timestamp; //in millis
@@ -31,7 +31,8 @@ void insert_data_dest_table(struct data_wrapper *data_wrapper, unsigned long des
 struct dest_map *get_dest_entry(unsigned long destip, long staleness);
 
 //if stale or new hop less than this hop, update entry, if destip not found, add the entry. if entry is updated or added, return this entry else return null
-struct dest_map *update_dest_map(unsigned long destip, char *dest_mac, int interface, uint32_t hop, unsigned long staleness);
+struct dest_map *update_dest_map(unsigned long destip, char *dest_mac, char *src_mac,
+    int interface, uint32_t hop, unsigned long staleness);
 
 //Return first data_wrapper node
 struct data_wrapper *get_data_from_queue(unsigned long destip);

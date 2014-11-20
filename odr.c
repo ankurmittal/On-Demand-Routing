@@ -1,8 +1,103 @@
 #include "odr.h"
+#include "destmap.h"
 
 static unsigned long cononicalip;
 static struct interface_info *hinterface = NULL, *tempinterface;
+static unsigned long broadcastid = 0;
+static int framefd = 0, staleness;
 
+struct rreq_map
+{
+    unsigned long sourceip;
+    unsigned long broadcastid;
+    int hop;
+    int resolved;
+    unsigned long timestamp;
+    struct rreq_map *next, *prev;
+};
+
+#define TTL_RREQ_MAP 5
+
+static struct rreq_map *hrreqmap = NULL, *trreqmap = NULL, *temprreq_map;
+
+void insert_rreq_map(unsigned long sourceip, unsigned long broadcastid, int hop)
+{
+    struct rreq_map *obj = (struct rreq_map *)malloc(sizeof(struct rreq_map));
+    memset(obj,0,sizeof(struct rreq_map));
+    obj->next=obj->prev=NULL;
+    if(hrreqmap == NULL)
+	trreqmap = hrreqmap = obj;
+    else
+    {
+	trreqmap->next = obj;
+	obj->prev = trreqmap;
+	trreqmap = obj;
+    }
+    obj->sourceip = sourceip;
+    obj->broadcastid = broadcastid;
+    obj->resolved = 0;
+    obj->hop = hop;
+    obj->timestamp = time(NULL);
+}
+
+struct rreq_map* find_rreq(unsigned long sourceip, unsigned long broadcastid)
+{
+    unsigned long t = time(NULL);
+    temprreq_map = hrreqmap;
+    while(temprreq_map != NULL)
+    {
+	if(temprreq_map->resolved == 1 && t - temprreq_map->timestamp > TTL_RREQ_MAP)
+	{
+	    struct rreq_map *temp = temprreq_map;
+	    if(temprreq_map->next)
+		temprreq_map->next->prev = temprreq_map->prev;
+	    if(temprreq_map->prev)
+		temprreq_map->prev->next = temprreq_map->next;
+	    if(hrreqmap == temprreq_map) {
+		hrreqmap = temprreq_map->next;
+	    }
+	    if(trreqmap == temprreq_map) {
+		trreqmap = temprreq_map->prev;
+	    }
+	    temprreq_map = temprreq_map->next;
+	    free(temp);
+	    continue;
+	}
+	if(temprreq_map->sourceip == sourceip && temprreq_map->broadcastid == broadcastid) 
+	{
+	    return temprreq_map;
+	}
+	temprreq_map = temprreq_map->next;
+    }
+    return NULL;
+}
+
+int update_rreq_map(unsigned long sourceip, unsigned long broadcastid, int hop)
+{
+    temprreq_map = find_rreq(sourceip, broadcastid);
+    if(temprreq_map)
+    {
+	if(temprreq_map->hop < hop) {
+	    temprreq_map->hop = hop;
+	    temprreq_map->timestamp = time(NULL);
+	    return 1;
+	}
+
+    } else {
+	insert_rreq_map(sourceip, broadcastid, hop);
+	return 1;
+    }
+    return 0;
+}
+
+void mark_rreq_resolved(unsigned long sourceip, unsigned long broadcastid)
+{
+    temprreq_map = find_rreq(sourceip, broadcastid);
+    if(temprreq_map) {
+	temprreq_map->resolved = 1;
+	temprreq_map->timestamp = time(NULL);
+    }
+}
 
 void free_interface_info() {
     while(hinterface != NULL) {
@@ -12,7 +107,7 @@ void free_interface_info() {
     }
 }
 
-void recieveframe(int sockfd)
+void recieveframe()
 {
     struct sockaddr_ll socket_address;
     socklen_t addrlen = sizeof(socket_address);
@@ -21,7 +116,7 @@ void recieveframe(int sockfd)
     struct odr_hdr *odr_hdr;
     int length = 0; /*length of the received frame*/ 
     memset(&socket_address, 0, addrlen);
-    length = recvfrom(sockfd, buffer, ETH_FRAME_LEN, 0, (SA *)&socket_address, &addrlen);
+    length = recvfrom(framefd, buffer, ETH_FRAME_LEN, 0, (SA *)&socket_address, &addrlen);
     if (length < 0) { perror("Error while recieving packet"); return;}
 
     printdebuginfo("message recieved at interface %d with mac address: ", socket_address.sll_ifindex);
@@ -54,7 +149,7 @@ int build_interface_info()
 	    continue;
 	if(strcmp(hwa->if_name, "eth0") == 0) {
 	    cononicalip = htons(sin->sin_addr.s_addr);
-    printf("Cononical IP: %lu", cononicalip);
+	    printf("Cononical IP: %lu", cononicalip);
 	} else {
 	    struct interface_info *iinfo = (struct interface_info*)malloc(sizeof(struct interface_info));
 	    int i;
@@ -82,8 +177,8 @@ int build_interface_info()
 
 }
 
-int sendframe(int sockfd, char *destmac, int interface, char *srcmac, 
-	void *payload, int data_lenght)
+int sendframe(char *destmac, int interface, char *srcmac, 
+	void *payload_hdr, int hdr_len, void *data, int data_lenght)
 {
 
     struct sockaddr_ll socket_address;
@@ -95,7 +190,7 @@ int sendframe(int sockfd, char *destmac, int interface, char *srcmac,
     unsigned char* etherhead = buffer;
 
     /*userdata in ethernet frame*/
-    void* data = buffer + 14;
+    void* data_p = buffer + 14;
 
     /*another pointer to ethernet header*/
     struct ethhdr *eh = (struct ethhdr *)etherhead;
@@ -139,11 +234,13 @@ int sendframe(int sockfd, char *destmac, int interface, char *srcmac,
     memcpy((void*)buffer, (void*)destmac, ETH_ALEN);
     memcpy((void*)(buffer+ETH_ALEN), (void*)srcmac, ETH_ALEN);
     eh->h_proto = htons(PROTO);
-    memcpy(data, payload, data_lenght);
+    memcpy(data_p, payload_hdr, hdr_len);
+    if(data)
+	memcpy(data_p + hdr_len, data, data_lenght);
     /*fill the frame with some data*/
 
     /*send the packet*/
-    n = sendto(sockfd, buffer, ETH_FRAME_LEN, 0, 
+    n = sendto(framefd, buffer, ETH_FRAME_LEN, 0, 
 	    (struct sockaddr*)&socket_address, sizeof(socket_address));
     if (n < 0) 
     { 
@@ -152,19 +249,42 @@ int sendframe(int sockfd, char *destmac, int interface, char *srcmac,
     return n;
 }
 
-int process_msg_cs(int sockfd, struct msg_send *msg_content, unsigned port)
+void send_rreq(unsigned long destip, int interface_exclude)
 {
-    struct odr_hdr odr_hdr;
-    struct rreq_hdr *rreq_hdr = &(odr_hdr.hdr.rreq_hdr);
-    odr_hdr.sourceip = cononicalip;
-    inet_pton(AF_INET, msg_content->ip, &(odr_hdr.destip));
-    tempinterface = hinterface;
-    while(tempinterface != NULL) 
+}
+
+
+int process_msg_cs(struct msg_send *msg_content, unsigned port)
+{
+    struct data_wrapper *data_wrapper = (struct data_wrapper *)malloc(sizeof(struct data_wrapper));
+    struct odr_hdr *odr_hdr = &data_wrapper->odr_hdr;
+    int data_len;
+    struct payload_hdr *payload_hdr = &(odr_hdr->hdr.payload_hdr);
+    struct dest_map *dest_map;
+
+    odr_hdr->sourceip = cononicalip;
+    inet_pton(AF_INET, msg_content->ip, &(odr_hdr->destip));
+    odr_hdr->destip = htons(odr_hdr->destip);
+    data_len = strlen(msg_content->msg);
+    data_wrapper->data = malloc(data_len + 1);
+    memcpy(data_wrapper->data, msg_content->msg, data_len + 1);
+    payload_hdr->port_src = port;
+    payload_hdr->port_dest = msg_content->port;
+    payload_hdr->hop = 0;
+    payload_hdr->message_len = data_len;
+    dest_map = get_dest_entry(odr_hdr->destip, staleness);
+    if(dest_map)
     {
-	unsigned char dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-	sendframe(sockfd, dest,tempinterface->interfaceno,tempinterface->if_haddr, &odr_hdr, sizeof(odr_hdr)); 
-	tempinterface = tempinterface->next;
+	sendframe(dest_map->dest_mac, dest_map->interface, 
+	    dest_map->src_mac, odr_hdr, sizeof(struct odr_hdr), data_wrapper->data, data_len + 1);
+	printdebuginfo("Sending frame to next hop");
     }
+    else //Store msg in quene 
+    {
+	insert_data_dest_table(data_wrapper, odr_hdr->destip);	
+	send_rreq(odr_hdr->destip, -1);
+    }
+
     return 1;
 
 }
@@ -175,8 +295,26 @@ int main(int argc, char **argv)
     struct sockaddr_un cliaddr, odraddr;
     socklen_t clilen;
     fd_set allset;
-    int n, tinterfaces = 0, sockfd;
+    int n, tinterfaces = 0;
     struct msg_send msg_content;
+
+    if(argc != 2)
+    {
+	printf("Usage ODR_anmittal <staleness>\n");
+	exit(1);
+    }
+
+    staleness = strtol(argv[1], NULL, 10);
+    if(errno)
+    {
+	perror("Error while converting staleness");
+	exit(1);
+    }
+    if(staleness < 0)
+    {
+	printf("Staleness should be less than 0");
+	exit(1);
+    }
 
     init_port_table();
 
@@ -189,21 +327,21 @@ int main(int argc, char **argv)
 
     tinterfaces = build_interface_info();
 
-    sockfd = Socket(AF_PACKET, SOCK_RAW, htons(PROTO));
+    framefd = Socket(AF_PACKET, SOCK_RAW, htons(PROTO));
 
     while(1)
     {
 	FD_ZERO(&allset);
 	FD_SET(localfd, &allset);
-	FD_SET(sockfd, &allset);
-	n = select(max(localfd, sockfd) + 1, &allset, NULL, NULL, NULL);
+	FD_SET(framefd, &allset);
+	n = select(max(localfd, framefd) + 1, &allset, NULL, NULL, NULL);
 	if(n < 0) {
 	    perror("Error during select, exiting.");
 	    goto exit;
 	}
-	if(FD_ISSET(sockfd, &allset)) {
+	if(FD_ISSET(framefd, &allset)) {
 	    //Recieved message from other vm
-	    recieveframe(sockfd);
+	    recieveframe();
 	}
 	if(FD_ISSET(localfd, &allset)) {
 	    int port;
@@ -214,7 +352,7 @@ int main(int argc, char **argv)
 	    printdebuginfo("Message from client/server %d, %d, %s, %s\n", msg_content.port, msg_content.flag, msg_content.msg, msg_content.ip);
 	    printdebuginfo("Cli sun_name:%s\n", cliaddr.sun_path);
 	    port = update_ttl_ptable(cliaddr.sun_path);
-	    process_msg_cs(sockfd, &msg_content, port);
+	    process_msg_cs(&msg_content, port);
 	}
     }
     //Listen(localfd, LISTENQ);
