@@ -33,15 +33,15 @@ struct payload_hdr
 struct rrep_hdr
 {
     uint32_t hop;
-    int forceflag;
+    short forceflag;
 };
 
 
 struct rreq_hdr
 {
     uint32_t hop, broadcastid;
-    int forceflag;
-    int rrep_sent;
+    short forceflag;
+    short rrep_sent;
 };
 
 struct odr_hdr

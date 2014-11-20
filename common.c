@@ -1,7 +1,7 @@
 #include "common.h"
 
 
-int msg_send(int sockfd, char *ip, int port, char *msg, int flag)
+int msg_send(int sockfd, char *ip, int port, char *msg, short flag)
 {
     struct sockaddr_un odraddr;
     struct msg_send msg_content;

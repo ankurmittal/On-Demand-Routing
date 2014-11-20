@@ -19,10 +19,10 @@ struct msg_send {
     char ip[16];
     int port;
     char msg[30];
-    int flag;
+    short flag;
 };
 
-int msg_send(int sockfd, char *ip, int port, char *msg, int flag);
+int msg_send(int sockfd, char *ip, int port, char *msg, short flag);
 struct msg_rec* msg_recv(int sockfd, int timeout);
 
 static void printdebuginfo(const char *format, ...)

@@ -5,6 +5,7 @@ static unsigned long cononicalip;
 static struct interface_info *hinterface = NULL, *tempinterface;
 static unsigned long broadcastid = 0;
 static int framefd = 0, staleness;
+static char b_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 struct rreq_map
 {
@@ -249,8 +250,32 @@ int sendframe(char *destmac, int interface, char *srcmac,
     return n;
 }
 
-void send_rreq(unsigned long destip, int interface_exclude)
+int send_rreq(unsigned long destip, short forceflag)
 {
+    struct odr_hdr odr_hdr;
+    struct rreq_hdr *rreq_hdr = &odr_hdr.hdr.rreq_hdr;
+    int n;
+    memset(&odr_hdr, 0, sizeof(odr_hdr));
+
+    odr_hdr.type = TYPE_RREQ;
+    odr_hdr.sourceip = cononicalip;
+    odr_hdr.destip = destip;
+
+    rreq_hdr->hop = 0;
+    rreq_hdr->broadcastid = broadcastid++;
+    rreq_hdr->forceflag = forceflag;
+    rreq_hdr->rrep_sent = 0;
+
+    tempinterface = hinterface;
+    while(tempinterface != NULL)
+    {
+	n = sendframe(b_mac, tempinterface->interfaceno, 
+		tempinterface->if_haddr, &odr_hdr, sizeof(struct odr_hdr), NULL, 0);
+	if(n < 0)
+	    return n;
+	tempinterface = tempinterface->next;
+    }
+    return 0;
 }
 
 
@@ -258,11 +283,12 @@ int process_msg_cs(struct msg_send *msg_content, unsigned port)
 {
     struct data_wrapper *data_wrapper = (struct data_wrapper *)malloc(sizeof(struct data_wrapper));
     struct odr_hdr *odr_hdr = &data_wrapper->odr_hdr;
-    int data_len;
+    int data_len, n;
     struct payload_hdr *payload_hdr = &(odr_hdr->hdr.payload_hdr);
     struct dest_map *dest_map;
 
     odr_hdr->sourceip = cononicalip;
+    odr_hdr->type = TYPE_PAYLOAD;
     inet_pton(AF_INET, msg_content->ip, &(odr_hdr->destip));
     odr_hdr->destip = htons(odr_hdr->destip);
     data_len = strlen(msg_content->msg);
@@ -275,17 +301,21 @@ int process_msg_cs(struct msg_send *msg_content, unsigned port)
     dest_map = get_dest_entry(odr_hdr->destip, staleness);
     if(dest_map)
     {
-	sendframe(dest_map->dest_mac, dest_map->interface, 
-	    dest_map->src_mac, odr_hdr, sizeof(struct odr_hdr), data_wrapper->data, data_len + 1);
 	printdebuginfo("Sending frame to next hop");
+	n = sendframe(dest_map->dest_mac, dest_map->interface, 
+		dest_map->src_mac, odr_hdr, sizeof(struct odr_hdr), data_wrapper->data, data_len + 1);
+	if(n < 0)
+	    return n;
     }
     else //Store msg in quene 
     {
 	insert_data_dest_table(data_wrapper, odr_hdr->destip);	
-	send_rreq(odr_hdr->destip, -1);
+	n = send_rreq(odr_hdr->destip, -1);
+	if(n < 0)
+	    return n;
     }
 
-    return 1;
+    return 0;
 
 }
 
@@ -352,7 +382,9 @@ int main(int argc, char **argv)
 	    printdebuginfo("Message from client/server %d, %d, %s, %s\n", msg_content.port, msg_content.flag, msg_content.msg, msg_content.ip);
 	    printdebuginfo("Cli sun_name:%s\n", cliaddr.sun_path);
 	    port = update_ttl_ptable(cliaddr.sun_path);
-	    process_msg_cs(&msg_content, port);
+	    n = process_msg_cs(&msg_content, port);
+	    if(n < 0)
+		goto exit;
 	}
     }
     //Listen(localfd, LISTENQ);
