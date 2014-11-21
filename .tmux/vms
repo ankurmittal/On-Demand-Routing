@@ -1,0 +1,20 @@
+selectp -t 0  # select the first (0) pane
+send-keys 'ssh -t root@vm1 "cd /home/anmittal; bash -l; bash -l"' Enter
+splitw -v -p 50 'ssh -t root@vm6 "cd /home/anmittal; bash -l"' # split it into two halves
+selectp -t 0 # select the first (0) pane
+splitw -h -p 20 'ssh -t root@vm5 "cd /home/anmittal; bash -l"' # split it into two halves
+selectp -t 0 # select the first (0) pane
+splitw -h -p 50 'ssh -t root@vm3 "cd /home/anmittal; bash -l"' # split it into two halves
+splitw -h -p 50 'ssh -t root@vm4 "cd /home/anmittal; bash -l"' # split it into two halves
+selectp -t 0 # select the first (0) pane
+splitw -h -p 50 'ssh -t root@vm2 "cd /home/anmittal; bash -l"' # split it into two halves
+selectp -t 5 # select the first (0) pane
+splitw -h -p 40 'ssh -t root@vm9 "cd /home/anmittal; bash -l"' # split it into two halves
+splitw -h -p 50 'ssh -t root@vm10 "cd /home/anmittal; bash -l"' # split it into two halves
+selectp -t 5 # select the first (0) pane
+splitw -h -p 67 'ssh -t root@vm7 "cd /home/anmittal; bash -l"' # split it into two halves
+splitw -h -p 50 'ssh -t root@vm8 "cd /home/anmittal; bash -l"' # split it into two halves
+selectp -t 0  # select the first (0) pane
+setw synchronize-panes on
+send-keys  C-l
+setw synchronize-panes off
