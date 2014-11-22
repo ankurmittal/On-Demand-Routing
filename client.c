@@ -52,15 +52,19 @@ sendmsg:
 	n = msg_send(sockfd, buffer, SERVER_PORT, c, timeoutflag);
 	msg = msg_recv(sockfd, 1);
 	if(msg == NULL) {
-		printf("timeout..!!\n");
 		timeoutflag = 1;
 		if(timeoutflag) {
-			unlink(cliaddr.sun_path);
-			exit(0);
+			n = msg_send(sockfd, buffer, SERVER_PORT, c, timeoutflag);
+			msg = msg_recv(sockfd, 1);
+			if(msg == NULL) {
+			    printf("timeout..!!\n");
+			    unlink(cliaddr.sun_path);
+			    exit(0);
+			}
 		}
 		goto sendmsg;
 	} else {
-		timeoutflag = 0;
+	    timeoutflag = 0;
 	}
 	printf("Received Msg: %s\n", msg->msg);
 	printf("Received IP: %s\n", msg->ip);

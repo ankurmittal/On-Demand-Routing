@@ -11,7 +11,7 @@ struct rreq_map
 {
     unsigned long sourceip;
     unsigned long broadcastid;
-    int hop;
+    int srchop, desthop;
     int resolved;
     unsigned long timestamp;
     struct rreq_map *next, *prev;
@@ -41,7 +41,8 @@ void insert_rreq_map(unsigned long sourceip, unsigned long broadcastid, int hop)
     obj->sourceip = sourceip;
     obj->broadcastid = broadcastid;
     obj->resolved = 0;
-    obj->hop = hop;
+    obj->srchop = hop;
+    obj->desthop = 1 << 14;
     obj->timestamp = time(NULL);
 }
 
@@ -51,7 +52,7 @@ struct rreq_map* find_rreq(unsigned long sourceip, unsigned long broadcastid)
     temprreq_map = hrreqmap;
     while(temprreq_map != NULL)
     {
-	if(temprreq_map->resolved == 1 && t - temprreq_map->timestamp > TTL_RREQ_MAP)
+	if(t - temprreq_map->timestamp > TTL_RREQ_MAP)
 	{
 	    struct rreq_map *temp = temprreq_map;
 	    if(temprreq_map->next)
@@ -77,17 +78,18 @@ struct rreq_map* find_rreq(unsigned long sourceip, unsigned long broadcastid)
     return NULL;
 }
 
-int update_rreq_map(unsigned long sourceip, unsigned long broadcastid, int hop)
+int update_rreq_map(unsigned long sourceip, unsigned long broadcastid, int hop, short issrc)
 {
     temprreq_map = find_rreq(sourceip, broadcastid);
     if(temprreq_map)
     {
-	if(temprreq_map->hop > hop) {
-	    temprreq_map->hop = hop;
+	int *oldhop = issrc ? &temprreq_map->srchop : &temprreq_map->desthop; 
+	printdebuginfo("old hop:%d\n", *oldhop);
+	if(*oldhop > hop) {
+	    *oldhop = hop;
 	    temprreq_map->timestamp = time(NULL);
 	    return 1;
 	}
-
     } else {
 	insert_rreq_map(sourceip, broadcastid, hop);
 	return 1;
@@ -161,13 +163,13 @@ void recieveframe()
 	    struct rreq_hdr *rreq_hdr = &odr_hdr->hdr.rreq_hdr;
 	    struct dest_map *dest_entry;
 	    printdebuginfo(" rreq recieved, hop:%d, rrep_sent:%d\n", rreq_hdr->hop, rreq_hdr->rrep_sent);
-	    if(cononicalip == odr_hdr->sourceip || update_rreq_map(odr_hdr->sourceip, rreq_hdr->broadcastid, rreq_hdr->hop) == 0)
+	    if(cononicalip == odr_hdr->sourceip || update_rreq_map(odr_hdr->sourceip, rreq_hdr->broadcastid, rreq_hdr->hop, 1) == 0)
 	    {
 		printdebuginfo(" Duplicate rreq\n");
 		break;
 	    }
-	    update_dest_map(odr_hdr->sourceip, src_mac, my_mac, socket_address.sll_ifindex, ++rreq_hdr->hop, staleness);
-	    dest_entry = get_dest_entry(odr_hdr->destip, staleness);
+	    update_dest_map(odr_hdr->sourceip, src_mac, my_mac, socket_address.sll_ifindex, ++rreq_hdr->hop, rreq_hdr->forceflag?0:staleness);
+	    dest_entry = get_dest_entry(odr_hdr->destip, rreq_hdr->forceflag?0:staleness);
 	    if((dest_entry || odr_hdr->destip == cononicalip) && rreq_hdr->rrep_sent == 0)
 	    {
 		struct odr_hdr rrep_odr_hdr;
@@ -179,6 +181,8 @@ void recieveframe()
 		rreq_hdr->rrep_sent = 1;
 		rrep_odr_hdr.sourceip = odr_hdr->sourceip;
 		rrep_odr_hdr.destip = odr_hdr->destip;
+		rrep_hdr->forceflag = rreq_hdr->forceflag;
+		rrep_hdr->broadcastid = rreq_hdr->broadcastid;
 		rrep_odr_hdr.type = TYPE_RREP;
 		printdebuginfo(" Found entry in dest_map, or same host,  need to send rrep\n");
 		if(odr_hdr->destip == cononicalip)
@@ -225,8 +229,16 @@ void recieveframe()
 	case TYPE_RREP:
 	{
 	    struct rrep_hdr *rrep_hdr = &odr_hdr->hdr.rrep_hdr;
-	    struct dest_map *src_dest_entry, *dest_e = update_dest_map(odr_hdr->destip, src_mac, my_mac, socket_address.sll_ifindex, ++rrep_hdr->hop, staleness);
-	    printdebuginfo(" rrep recieved, hop:%d\n", rrep_hdr->hop - 1);
+	    struct dest_map *src_dest_entry, *dest_e;
+	    printdebuginfo(" rrep recieved, hop:%d, bid:%ld\n", rrep_hdr->hop, rrep_hdr->broadcastid);
+	    if(update_rreq_map(odr_hdr->sourceip, rrep_hdr->broadcastid, rrep_hdr->hop, 0) == 0)
+	    {
+		printdebuginfo(" Duplicate rrep, bid\n");
+		break;
+	    }
+	    dest_e = update_dest_map(odr_hdr->destip, src_mac, my_mac, 
+		    socket_address.sll_ifindex, ++rrep_hdr->hop, rrep_hdr->forceflag? 0 : staleness);
+
 	    if(!dest_e)
 	    {
 		printdebuginfo(" Duplicate rrep\n");
@@ -292,7 +304,7 @@ void recieveframe()
 	    else
 	    {
 		n = sendframe(dest_entry->nexthop_mac, dest_entry->interface, 
-		    dest_entry->src_mac, odr_hdr, sizeof(struct odr_hdr), (char *)odr_hdr + hdr_len, payload_hdr->message_len);
+			dest_entry->src_mac, odr_hdr, sizeof(struct odr_hdr), (char *)odr_hdr + hdr_len, payload_hdr->message_len);
 		if(n < 0)
 		    goto exit;
 	    }
@@ -311,7 +323,6 @@ int build_interface_info()
     int tinterfaces = 0;
     for (hwahead = hwa = Get_hw_addrs(); hwa != NULL; hwa = hwa->hwa_next) {
 	struct sockaddr_in  *sin = (struct sockaddr_in *) (hwa->ip_addr);
-	printdebuginfo(" %ld\n", sin->sin_addr.s_addr);
 	if(strcmp(hwa->if_name, "lo") == 0)
 	    continue;
 	if(strcmp(hwa->if_name, "eth0") == 0) {

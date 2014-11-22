@@ -32,7 +32,7 @@ struct payload_hdr
 
 struct rrep_hdr
 {
-    uint32_t hop;
+    uint32_t hop, broadcastid;
     short forceflag;
 };
 
