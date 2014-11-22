@@ -8,7 +8,7 @@ int clean_input() {
 
 void getInput(char *result) {
     int num =0;
-    char count[2];
+    char count[3];
     char v,m,c;
     do {
         printf("\nEnter client(vm1 - vm10): ");
@@ -24,7 +24,7 @@ int main()
     struct sockaddr_un cliaddr;
     struct msg_rec *msg;
     char *c = "c";
-    char vm[4], hostname[10], buffer[16], data[50];
+    char vm[5], hostname[10], buffer[16], data[50];
     struct hostent *ent;
     
     gethostname(hostname, sizeof(hostname));
