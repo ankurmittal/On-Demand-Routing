@@ -5,7 +5,7 @@ static unsigned long cononicalip;
 static struct interface_info *hinterface = NULL, *tempinterface;
 static unsigned long broadcastid = 0;
 static int framefd = 0, staleness;
-static char b_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+static char b_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, hostname[10];
 
 struct rreq_map
 {
@@ -20,6 +20,8 @@ struct rreq_map
 #define TTL_RREQ_MAP 5
 
 static struct rreq_map *hrreqmap = NULL, *trreqmap = NULL, *temprreq_map;
+
+static int forwardrreq(struct odr_hdr *odr_hdr, int interfacetoexclude);
 
 void insert_rreq_map(unsigned long sourceip, unsigned long broadcastid, int hop)
 {
@@ -78,7 +80,7 @@ int update_rreq_map(unsigned long sourceip, unsigned long broadcastid, int hop)
     temprreq_map = find_rreq(sourceip, broadcastid);
     if(temprreq_map)
     {
-	if(temprreq_map->hop < hop) {
+	if(temprreq_map->hop > hop) {
 	    temprreq_map->hop = hop;
 	    temprreq_map->timestamp = time(NULL);
 	    return 1;
@@ -108,14 +110,30 @@ void free_interface_info() {
     }
 }
 
+unsigned char *getmacbyinterface(int interfaceno)
+{
+    tempinterface = hinterface;
+    while(tempinterface != NULL)
+    {
+	if(tempinterface->interfaceno == interfaceno)
+	{
+	    return tempinterface->if_haddr;
+	}
+	tempinterface = tempinterface->next;
+    }
+    return "";
+}
+
 void recieveframe()
 {
     struct sockaddr_ll socket_address;
     socklen_t addrlen = sizeof(socket_address);
     char *ptr;
+    char *my_mac;
+    unsigned char src_mac[IF_HADDR];
     void* buffer = (void*)malloc(ETH_FRAME_LEN); /*Buffer for ethernet frame*/
     struct odr_hdr *odr_hdr;
-    int length = 0; /*length of the received frame*/ 
+    int length = 0, n; /*length of the received frame*/ 
     memset(&socket_address, 0, addrlen);
     length = recvfrom(framefd, buffer, ETH_FRAME_LEN, 0, (SA *)&socket_address, &addrlen);
     if (length < 0) { perror("Error while recieving packet"); return;}
@@ -125,18 +143,101 @@ void recieveframe()
 
     ptr = buffer + ETH_ALEN;
     length = IF_HADDR;
+    memcpy(src_mac, ptr, IF_HADDR);
     do {
-	printdebuginfo("%.2x%s", *ptr++ & 0xff, (length == 1) ? " " : ":");
+	printdebuginfo("%.2x%s", *(src_mac - length + IF_HADDR), (length == 1) ? " " : ":");
     } while (--length > 0);
-    odr_hdr = buffer + 14;
-    printf("\n\n%lu, %lu\n", odr_hdr->sourceip, odr_hdr->destip);
+    odr_hdr = buffer + sizeof(struct ethhdr);
+    printdebuginfo("\n\n%lu, %lu\n", odr_hdr->sourceip, odr_hdr->destip);
+    my_mac = getmacbyinterface(socket_address.sll_ifindex);
 
-    /*printdebuginfo("data: ");
-      do {
-      printdebuginfo("%c", *ptr++);
-      length++;
-      } while (length < 1500);
-      printdebuginfo("\n");*/
+    switch(odr_hdr->type)
+    {
+	case TYPE_RREQ:
+	{
+	    struct rreq_hdr *rreq_hdr = &odr_hdr->hdr.rreq_hdr;
+	    struct dest_map *dest_entry;
+	    int rreq_map_u = 0;
+	    printdebuginfo("rreq recieved\n");
+	    printdebuginfo("Hop :%d\n", rreq_hdr->hop);
+	    if(cononicalip == odr_hdr->sourceip || (rreq_map_u = update_rreq_map(odr_hdr->sourceip, rreq_hdr->broadcastid, rreq_hdr->hop)) == 0)
+	    {
+		printdebuginfo("Duplicate rreq\n");
+		break;
+	    }
+	    update_dest_map(odr_hdr->sourceip, src_mac, my_mac, socket_address.sll_ifindex, ++rreq_hdr->hop, staleness);
+	    dest_entry = get_dest_entry(odr_hdr->destip, staleness);
+	    printdebuginfo("Rrep sent: %d\n", rreq_hdr->rrep_sent);
+	    if((dest_entry || odr_hdr->destip == cononicalip) && rreq_hdr->rrep_sent == 0)
+	    {
+		struct odr_hdr rrep_odr_hdr;
+		struct dest_map *src_dest_entry =  NULL;
+		char rrep_d_mac[IF_HADDR];
+		int interfaceno;
+		memset(&rrep_odr_hdr, 0, sizeof(rrep_odr_hdr));
+		struct rrep_hdr *rrep_hdr = &rrep_odr_hdr.hdr.rrep_hdr;
+		rreq_hdr->rrep_sent = 1;
+		rrep_odr_hdr.sourceip = odr_hdr->sourceip;
+		rrep_odr_hdr.destip = odr_hdr->destip;
+		rrep_odr_hdr.type = TYPE_RREP;
+		printdebuginfo("Found entry in dest_map, or same host,  need to send rrep\n");
+		if(odr_hdr->destip == cononicalip)
+		{
+		    rrep_hdr->hop = 0;
+		    memcpy(rrep_d_mac, src_mac, IF_HADDR);
+		    interfaceno = socket_address.sll_ifindex;
+		}
+		else
+    		{
+		    src_dest_entry =  get_dest_entry(odr_hdr->destip, 1 << 15);
+
+		    if(!src_dest_entry)
+		    {
+			printdebuginfo("Something wrong, src_dest_map not found\n");
+			break;
+		    }
+		    rrep_hdr->hop = dest_entry->hop;
+		    memcpy(rrep_d_mac, src_dest_entry->nexthop_mac, IF_HADDR);
+		    my_mac = src_dest_entry->src_mac;
+		    interfaceno = src_dest_entry->interface;
+		}
+		printdebuginfo("Sending rrep\n");
+		n = sendframe(rrep_d_mac, interfaceno, 
+		    my_mac, &rrep_odr_hdr, sizeof(struct odr_hdr), NULL, 0);
+		if(n < 0)
+		    goto exit;
+		//Should we send when this node is dest?
+		n = forwardrreq(odr_hdr, socket_address.sll_ifindex);
+		if(n < 0)
+		    goto exit;
+
+	    }
+	    else 
+	    {
+		n = forwardrreq(odr_hdr, socket_address.sll_ifindex);
+		if(n < 0)
+		    goto exit;
+	    }
+	    break;
+	}
+	case TYPE_RREP:
+	{
+	    printdebuginfo("rrep recieved\n");
+	    break;
+	}
+	case TYPE_PAYLOAD:
+	{
+	    //What to do with hop?
+	    struct payload_hdr *payload_hdr = &odr_hdr->hdr.payload_hdr;
+	    char *data = malloc(payload_hdr->message_len);
+	    memcpy(data, odr_hdr + sizeof(odr_hdr), payload_hdr->message_len);
+	    printdebuginfo("payload recieved\n");
+	    break;
+	}
+    }
+
+exit:
+    free(buffer);
 }
 
 int build_interface_info() 
@@ -149,8 +250,8 @@ int build_interface_info()
 	if(strcmp(hwa->if_name, "lo") == 0)
 	    continue;
 	if(strcmp(hwa->if_name, "eth0") == 0) {
-	    cononicalip = htons(sin->sin_addr.s_addr);
-	    printf("Cononical IP: %lu", cononicalip);
+	    cononicalip = htonl(sin->sin_addr.s_addr);
+	    printdebuginfo("Cononical IP: %lu\n", ntohl(cononicalip));
 	} else {
 	    struct interface_info *iinfo = (struct interface_info*)malloc(sizeof(struct interface_info));
 	    int i;
@@ -171,21 +272,20 @@ int build_interface_info()
 	}
     }
 
-    printdebuginfo("Cononical IP: %lu\n", cononicalip);
-
     free_hwa_info(hwahead);
     return tinterfaces;
 
 }
 
 int sendframe(char *destmac, int interface, char *srcmac, 
-	void *payload_hdr, int hdr_len, void *data, int data_lenght)
+	struct odr_hdr *odr_hdr, int hdr_len, void *data, int data_lenght)
 {
 
     struct sockaddr_ll socket_address;
     int n;
     /*buffer for ethernet frame*/
     void* buffer;
+    char src_name[10], dest_name[10];
 
     /*userdata in ethernet frame*/
     void* data_p;
@@ -201,8 +301,15 @@ int sendframe(char *destmac, int interface, char *srcmac,
     eh = buffer;
 
     data_p = buffer + sizeof(struct ethhdr);
+    gethostnamebyaddr(ntohl(odr_hdr->sourceip), src_name);
+    gethostnamebyaddr(ntohl(odr_hdr->destip), dest_name);
 
     printdebuginfo("Sending msg to %d\n", interface);
+
+    printf("ODR at %s: sending frame hdr src %s dest ", hostname, hostname);
+    for(n = 0; n < IF_HADDR; n++)
+	printf("%.2x%s", *(destmac + n) & 0xff, (n == IF_HADDR - 1) ? " " : ":");
+    printf("\n\t\tODR msg type %d src %s  dest %s\n", odr_hdr->type, src_name, dest_name);
     /*prepare sockaddr_ll*/
 
     /*RAW communication*/
@@ -239,7 +346,7 @@ int sendframe(char *destmac, int interface, char *srcmac,
     memcpy((void*)buffer, (void*)destmac, ETH_ALEN);
     memcpy((void*)(buffer+ETH_ALEN), (void*)srcmac, ETH_ALEN);
     eh->h_proto = htons(PROTO);
-    memcpy(data_p, payload_hdr, hdr_len);
+    memcpy(data_p, odr_hdr, hdr_len);
     if(data)
 	memcpy(data_p + hdr_len, data, data_lenght);
     /*fill the frame with some data*/
@@ -251,7 +358,26 @@ int sendframe(char *destmac, int interface, char *srcmac,
     { 
 	perror("Error while sending packet.");
     }
+    free(buffer);
     return n;
+}
+
+static int forwardrreq(struct odr_hdr *odr_hdr, int interfacetoexclude)
+{
+    int n;
+    tempinterface = hinterface;
+    while(tempinterface != NULL)
+    {
+	if(tempinterface->interfaceno != interfacetoexclude)
+	{	
+	    n = sendframe(b_mac, tempinterface->interfaceno, 
+		    tempinterface->if_haddr, odr_hdr, sizeof(struct odr_hdr), NULL, 0);
+	    if(n < 0)
+		return n;
+	}
+	tempinterface = tempinterface->next;
+    }
+    return 0;
 }
 
 int send_rreq(unsigned long destip, short forceflag)
@@ -294,7 +420,7 @@ int process_msg_cs(struct msg_send *msg_content, unsigned port)
     odr_hdr->sourceip = cononicalip;
     odr_hdr->type = TYPE_PAYLOAD;
     inet_pton(AF_INET, msg_content->ip, &(odr_hdr->destip));
-    odr_hdr->destip = htons(odr_hdr->destip);
+    odr_hdr->destip = htonl(odr_hdr->destip);
     data_len = strlen(msg_content->msg);
     data_wrapper->data = malloc(data_len + 1);
     memcpy(data_wrapper->data, msg_content->msg, data_len + 1);
@@ -303,10 +429,11 @@ int process_msg_cs(struct msg_send *msg_content, unsigned port)
     payload_hdr->hop = 0;
     payload_hdr->message_len = data_len;
     dest_map = get_dest_entry(odr_hdr->destip, staleness);
+    //Handle when src == dest
     if(dest_map)
     {
 	printdebuginfo("Sending frame to next hop");
-	n = sendframe(dest_map->dest_mac, dest_map->interface, 
+	n = sendframe(dest_map->nexthop_mac, dest_map->interface, 
 		dest_map->src_mac, odr_hdr, sizeof(struct odr_hdr), data_wrapper->data, data_len + 1);
 	if(n < 0)
 	    return n;
@@ -349,6 +476,8 @@ int main(int argc, char **argv)
 	printf("Staleness should be less than 0");
 	exit(1);
     }
+
+    gethostname(hostname, sizeof(hostname));
 
     init_port_table();
 
