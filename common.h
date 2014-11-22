@@ -36,6 +36,21 @@ static void printdebuginfo(const char *format, ...)
     va_end(args);
 }
 
+
+static long currentTimeInMillis() {
+    static struct timeval *basetime = NULL;
+    struct timeval now;
+    long ms = 0;
+    if(basetime == NULL)
+    {
+	basetime = malloc(sizeof(struct timeval));
+	gettimeofday(basetime, NULL);
+    }
+    gettimeofday(&now, NULL);
+    ms = ((now.tv_sec - basetime->tv_sec)*1000) + ((now.tv_usec - basetime->tv_usec)/1000);
+    return ms;
+}
+
 static void gethostnamebyaddr(unsigned long ipaddr, char *buffer)
 {
     struct hostent *he;

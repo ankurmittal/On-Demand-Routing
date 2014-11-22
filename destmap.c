@@ -5,6 +5,7 @@ struct dest_map* insert_in_map(struct data_wrapper *data_wrapper, unsigned long 
     bzero(newNode, sizeof(struct dest_map));
     newNode->destip = destip;
     newNode->data = data_wrapper;
+    newNode->hop = -1;
     newNode->resolved = 0;
     newNode->next = NULL;
     if(hdestmap == NULL)
@@ -15,16 +16,9 @@ struct dest_map* insert_in_map(struct data_wrapper *data_wrapper, unsigned long 
 	tdestmap->next = newNode;
 	tdestmap = newNode;
     }
+    newNode->timestamp = currentTimeInMillis();
     return newNode;
 
-}
-
-long currentTimeInMillis() {
-    long ms = 0;
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    ms = (now.tv_sec*1000) + (now.tv_usec/1000);
-    return ms;
 }
 
 /*
@@ -44,6 +38,7 @@ void insert_data_dest_table(struct data_wrapper *data_wrapper, unsigned long des
                 if (tempData->odr_hdr.sourceip == data_wrapper->odr_hdr.sourceip) {
                     if ((tempData->odr_hdr.hdr.payload_hdr.port_src == data_wrapper->odr_hdr.hdr.payload_hdr.port_src)
                         && (tempData->odr_hdr.hdr.payload_hdr.port_dest== data_wrapper->odr_hdr.hdr.payload_hdr.port_dest)) {
+			free(tempData->data);
                         tempData->data = data_wrapper->data;
                         free(data_wrapper);
                         return;
@@ -52,8 +47,9 @@ void insert_data_dest_table(struct data_wrapper *data_wrapper, unsigned long des
             }
             *i_data = data_wrapper;
             return;
-        } else
-            temp = temp->next;
+        }
+        temp = temp->next;
+	i_data = &temp->data;
     }
     insert_in_map(data_wrapper, destip);
 }
@@ -66,11 +62,15 @@ void insert_data_dest_table(struct data_wrapper *data_wrapper, unsigned long des
 struct dest_map *get_dest_entry(unsigned long destip, long staleness) {
     long diff = 0;
     struct dest_map *temp = hdestmap;
+    staleness = staleness * 1000;
     while (temp != NULL) {
         if(temp->destip == destip) {
+	    if(temp->resolved == 0)
+		return NULL;
             diff = currentTimeInMillis() - temp->timestamp;
             if (diff < staleness)
                 return temp;
+	    printdebuginfo("Stale Entry for ip:%lu, staleness:%ld, diff:%ld, time:%ld, times:%ld\n", ntohl(destip), staleness, diff, currentTimeInMillis(), temp->timestamp);
             temp->resolved = 0;
 	    return NULL;
         } 
@@ -88,13 +88,18 @@ struct dest_map *get_dest_entry(unsigned long destip, long staleness) {
 struct dest_map *update_dest_map(unsigned long destip, char *nexthop_mac, char *src_mac, 
     int interface, uint32_t hop, unsigned long staleness) {
     int found = 0;
+    staleness = staleness * 1000;
     struct dest_map *temp = hdestmap, *result = NULL;
 
     while (temp != NULL) {
         if(temp->destip == destip) {
-            if (temp->hop > hop || (temp->timestamp - currentTimeInMillis()) > staleness) {
+            if (temp->resolved == 0 || temp->hop > hop || (currentTimeInMillis() - temp->timestamp) > staleness) {
+		printdebuginfo(" Will update table for destip:%lu\n", ntohl(destip));
 		break;
-            }
+            } else if(temp->hop == hop)
+	    {
+		temp->timestamp = currentTimeInMillis();
+	    }
             return NULL;
         } 
 	temp = temp->next;
@@ -103,6 +108,7 @@ struct dest_map *update_dest_map(unsigned long destip, char *nexthop_mac, char *
 	temp = insert_in_map(NULL, destip);
     memcpy(temp->nexthop_mac, nexthop_mac, 6);
     memcpy(temp->src_mac, src_mac, 6);
+    temp->timestamp = currentTimeInMillis();
     temp->interface = interface;
     temp->hop = hop;
     temp->resolved = 1;
