@@ -4,7 +4,7 @@
 static unsigned long cononicalip;
 static struct interface_info *hinterface = NULL, *tempinterface;
 static unsigned long broadcastid = 0;
-static int framefd = 0, staleness;
+static int framefd = 0, staleness, localfd = 0;
 static char b_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, hostname[10];
 
 struct rreq_map
@@ -24,6 +24,34 @@ static struct rreq_map *hrreqmap = NULL, *trreqmap = NULL, *temprreq_map;
 static int forwardrreq(struct odr_hdr *odr_hdr, int interfacetoexclude);
 static int sendremainingpayload(struct dest_map *dest_entry);
 static int send_rreq(unsigned long destip, short forceflag, int excludeinterface);
+
+int writeToServer(int port_dest, int port_src, char *buf, int msglen, long destip) {
+	char *filename = NULL;
+    	int n = 0;
+	struct msg_rec *recvStruct = NULL;
+	struct sockaddr_un odraddr;
+	unsigned long dip = ntohl(destip);	
+	
+	filename = get_sun_path(port_dest);
+	if(filename == NULL) {
+		printdebuginfo("sun_path not found..!!\n");
+		return 0;
+	}
+    	bzero(&odraddr, sizeof(odraddr));
+    	odraddr.sun_family = AF_LOCAL;
+    	strcpy(odraddr.sun_path, filename);
+
+	recvStruct = malloc(sizeof(struct msg_rec));
+	recvStruct->port = port_src;
+	memcpy(recvStruct->msg, buf, msglen);
+	inet_ntop(AF_INET, &dip, recvStruct->ip, INET_ADDRSTRLEN);
+
+	n = sendto(localfd, recvStruct, sizeof(struct msg_rec), 0, (SA *) &odraddr, sizeof(odraddr));
+	if(n < 0) {
+		printdebuginfo("error writing..!!\n");
+	}
+	return n;
+}
 
 void insert_rreq_map(unsigned long sourceip, unsigned long broadcastid, int hop)
 {
@@ -281,10 +309,14 @@ void recieveframe()
 	    struct payload_hdr *payload_hdr = &odr_hdr->hdr.payload_hdr;
 	    struct dest_map *dest_entry;
 	    int hdr_len = sizeof(struct odr_hdr);
-	    printdebuginfo(" payload recieved, hop:%d, data:%s\n", payload_hdr->hop, ((char *)odr_hdr)+ hdr_len);
+	    struct msg_rec *recvStruct = NULL;
+
+		printdebuginfo(" payload recieved, hop:%d, data:%s\n", payload_hdr->hop, ((char *)odr_hdr)+ hdr_len);
 	    if(odr_hdr->destip == cononicalip)
 	    {
 		printdebuginfo("Recieved msg on odr, forward to server\n");
+		
+		writeToServer(payload_hdr->port_dest, payload_hdr->port_src, ((char *)odr_hdr)+hdr_len, payload_hdr->message_len, odr_hdr->destip);
 		break;
 	    }
 	    update_dest_map(odr_hdr->sourceip, src_mac, my_mac, socket_address.sll_ifindex, ++payload_hdr->hop, staleness);
@@ -530,6 +562,12 @@ int process_msg_cs(struct msg_send *msg_content, unsigned port)
     payload_hdr->message_len = data_len + 1;
     dest_map = get_dest_entry(odr_hdr->destip, staleness);
     //Handle when src == dest
+	if(cononicalip == odr_hdr->destip) {	
+		writeToServer(payload_hdr->port_dest, payload_hdr->port_src, data_wrapper->data, data_len+1, odr_hdr->destip);
+		free(data_wrapper->data);
+		free(data_wrapper);
+		return 0;
+	}
     if(dest_map && !msg_content->flag)
     {
 	printdebuginfo(" Sending frame to next hop");
@@ -552,7 +590,6 @@ int process_msg_cs(struct msg_send *msg_content, unsigned port)
 
 int main(int argc, char **argv)
 {
-    int localfd, connfd;
     struct sockaddr_un cliaddr, odraddr;
     socklen_t clilen;
     fd_set allset;
