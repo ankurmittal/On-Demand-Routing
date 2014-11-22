@@ -4,7 +4,7 @@ CC = gcc
 
 LIBS =  /home/courses/cse533/Stevens/unpv13e/libunp.a
 
-FLAGS = -g -O2 -I/home/courses/cse533/Stevens/unpv13e/lib
+FLAGS = -g -DNDEBUGINFO -O2 -I/home/courses/cse533/Stevens/unpv13e/lib
 
 all: client_${LOGIN}  server_${LOGIN} ODR_${LOGIN} prhwaddrs
 	
@@ -21,7 +21,7 @@ client.o : client.c common.h
 	${CC} ${FLAGS} -c client.c
 
 server.o : server.c common.h
-	${CC} ${FLAGS} -c server.c
+	${CC} ${FLAGS} -DPROTO=${ID} -c server.c
 
 client_${LOGIN} : client.o common.o
 	${CC} -g -o $@ client.o common.o ${LIBS}

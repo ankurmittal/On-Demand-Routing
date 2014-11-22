@@ -38,18 +38,18 @@ int main()
 
 	printdebuginfo("\n%s\n", cliaddr.sun_path);
 
-	//while (1) {
-	getInput(vm);
-	if((ent = gethostbyname(vm)) == NULL) {
+	while (1) {
+	    getInput(vm);
+	    if((ent = gethostbyname(vm)) == NULL) {
 		perror("gethostbyname returned NULL");
 		exit(1);
-	}
-	inet_ntop(PF_INET, ent->h_addr_list[0], buffer, sizeof(buffer));
-	printf("%s\n", buffer);
-	printf("\nclient at node %s sending request to server at %s\n", hostname, vm);
-	n = msg_send(sockfd, buffer, SERVER_PORT, c, 0);
-	msg = msg_recv(sockfd, 1);
-	if(msg == NULL) {
+	    }
+	    inet_ntop(PF_INET, ent->h_addr_list[0], buffer, sizeof(buffer));
+	    printf("%s\n", buffer);
+	    printf("\nclient at node %s sending request to server at %s\n", hostname, vm);
+	    n = msg_send(sockfd, buffer, SERVER_PORT, c, 0);
+	    msg = msg_recv(sockfd, 1);
+	    if(msg == NULL) {
 		printf("client at node %s: timeout on response from %s", hostname, vm);
 		n = msg_send(sockfd, buffer, SERVER_PORT, c, 1);
 		msg = msg_recv(sockfd, 1);
@@ -58,9 +58,10 @@ int main()
 		    unlink(cliaddr.sun_path);
 		    exit(0);
 		}
+	    }
+	    printf("client at node %s: received from %s <%s>\n", hostname, vm,  msg->msg);
+	    free(msg);
 	}
-	printf("client at node %s: received from %s <%s>\n", hostname, vm,  msg->msg);
-	//}
 
 	unlink(cliaddr.sun_path);
 	exit(0);

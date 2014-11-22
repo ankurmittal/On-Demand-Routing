@@ -1,7 +1,7 @@
 #include "common.h"
 
 
-int msg_send(int sockfd, char *ip, int port, char *msg, short flag)
+int msg_send(int sockfd, char *ip, unsigned int port, char *msg, short flag)
 {
     struct sockaddr_un odraddr;
     struct msg_send msg_content;
@@ -33,7 +33,7 @@ int msg_send(int sockfd, char *ip, int port, char *msg, short flag)
 
 struct msg_rec* msg_recv(int sockfd, int timeout)
 {
-    struct msg_rec *recv;
+    struct msg_rec *recv = malloc(sizeof(struct msg_rec));
     static struct timeval selectTime;
     int n = 0;
     fd_set allset;
@@ -48,12 +48,11 @@ struct msg_rec* msg_recv(int sockfd, int timeout)
     FD_SET(sockfd, &allset);
     select(sockfd+1, &allset, NULL, NULL, ((timeout) ? (&selectTime) : NULL));
     if(FD_ISSET(sockfd, &allset)) {
-        n = read(sockfd,recv,sizeof(recv));
+        n = read(sockfd,recv,sizeof(struct msg_rec));
         if (n < 0) {
             perror("ERROR reading from socket");
             exit(1);
         }
-        printf("Here is the message: %s\n",recv->msg);
         return recv;
     } else {
         printdebuginfo("Timeout occured in receive message..!!\n");

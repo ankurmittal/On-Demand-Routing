@@ -13,7 +13,7 @@ int main()
     struct in_addr ipv4addr;
     
     gethostname(hostname, sizeof(hostname));
-    printf("My hostname: %s\n", hostname);
+    printdebuginfo("My hostname: %s\n", hostname);
     
     unlink(SERVER_PATH);
     
@@ -21,31 +21,28 @@ int main()
     bzero(&servaddr, sizeof(servaddr));
     servaddr.sun_family = AF_LOCAL;
     strcpy(servaddr.sun_path, SERVER_PATH);
+    printdebuginfo("Server sun_tah:%s\n", SERVER_PATH);
     Bind(sockfd, (SA *) &servaddr, sizeof(servaddr));
     
-    //while (1) {
+    while (1) {
         msg = msg_recv(sockfd, 0);
-        if(msg == NULL) {
-            printf("timeout..!!\n");
-            exit(0);
-            //continue;
-        }
-        printf("Received Msg: %s\n", msg->msg);
-        printf("Received IP: %s\n", msg->ip);
-        printf("Received Port: %d\n", msg->port);
+        printdebuginfo("Received Msg: %s\n", msg->msg);
+        printdebuginfo("Received IP: %s\n", msg->ip);
+        printdebuginfo("Received Port: %u\n", msg->port);
         client_port = msg->port;
         
         inet_pton(AF_INET, msg->ip, &ipv4addr);
         he = gethostbyaddr(&ipv4addr, sizeof ipv4addr, AF_INET);
         client_hostname = he->h_name;
-        printf("Client hostname: %s\n", client_hostname);
+        printdebuginfo("Client hostname: %s\n", client_hostname);
         
         ticks = time(NULL);
-        snprintf(ts, sizeof(ts), "%.24s\r\n", ctime(&ticks));
+        snprintf(ts, sizeof(ts), "%.24s", ctime(&ticks));
         
         printf("\nserver at %s responding to request from %s\n", hostname, client_hostname);
         
-        printf("Sending timestamp: %s\n", ts);
+        printdebuginfo("Sending timestamp: %s\n", ts);
         n = msg_send(sockfd, msg->ip, client_port, ts, 0);
-    //}
+	free(msg);
+    }
 }

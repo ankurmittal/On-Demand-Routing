@@ -12,17 +12,17 @@
 struct msg_rec {
     char msg[30];
     char ip[16];
-    int port;
+    unsigned int port;
 };
 
 struct msg_send {
     char ip[16];
-    int port;
+    unsigned int port;
     char msg[30];
     short flag;
 };
 
-int msg_send(int sockfd, char *ip, int port, char *msg, short flag);
+int msg_send(int sockfd, char *ip, unsigned int port, char *msg, short flag);
 struct msg_rec* msg_recv(int sockfd, int timeout);
 
 static void printdebuginfo(const char *format, ...)

@@ -25,11 +25,11 @@ static int forwardrreq(struct odr_hdr *odr_hdr, int interfacetoexclude);
 static int sendremainingpayload(struct dest_map *dest_entry);
 static int send_rreq(unsigned long destip, short forceflag, int excludeinterface);
 
-int writeToServer(int port_dest, int port_src, char *buf, int msglen, long destip) {
+int writeToServerClient(unsigned int port_dest, unsigned int port_src, char *buf, int msglen, unsigned long destip) {
 	char *filename = NULL;
     	int n = 0;
 	struct msg_rec *recvStruct = NULL;
-	struct sockaddr_un odraddr;
+	struct sockaddr_un destaddr;
 	unsigned long dip = ntohl(destip);	
 	
 	filename = get_sun_path(port_dest);
@@ -37,19 +37,21 @@ int writeToServer(int port_dest, int port_src, char *buf, int msglen, long desti
 		printdebuginfo("sun_path not found..!!\n");
 		return 0;
 	}
-    	bzero(&odraddr, sizeof(odraddr));
-    	odraddr.sun_family = AF_LOCAL;
-    	strcpy(odraddr.sun_path, filename);
+    	bzero(&destaddr, sizeof(destaddr));
+    	destaddr.sun_family = AF_LOCAL;
+    	strcpy(destaddr.sun_path, filename);
+	printdebuginfo("sun_path_name:%s\n", filename);
 
 	recvStruct = malloc(sizeof(struct msg_rec));
 	recvStruct->port = port_src;
 	memcpy(recvStruct->msg, buf, msglen);
-	inet_ntop(AF_INET, &dip, recvStruct->ip, INET_ADDRSTRLEN);
+	inet_ntop(AF_INET, &dip, recvStruct->ip, sizeof(recvStruct->ip));
 
-	n = sendto(localfd, recvStruct, sizeof(struct msg_rec), 0, (SA *) &odraddr, sizeof(odraddr));
+	n = sendto(localfd, recvStruct, sizeof(struct msg_rec), 0, (SA *) &destaddr, sizeof(destaddr));
 	if(n < 0) {
-		printdebuginfo("error writing..!!\n");
+		perror("error writing..!!");
 	}
+	free(recvStruct);
 	return n;
 }
 
@@ -314,9 +316,9 @@ void recieveframe()
 		printdebuginfo(" payload recieved, hop:%d, data:%s\n", payload_hdr->hop, ((char *)odr_hdr)+ hdr_len);
 	    if(odr_hdr->destip == cononicalip)
 	    {
-		printdebuginfo("Recieved msg on odr, forward to server\n");
+		printdebuginfo("Recieved msg on odr, forward to server, %u\n", payload_hdr->port_dest);
 		
-		writeToServer(payload_hdr->port_dest, payload_hdr->port_src, ((char *)odr_hdr)+hdr_len, payload_hdr->message_len, odr_hdr->destip);
+		writeToServerClient(ntohs(payload_hdr->port_dest), ntohs(payload_hdr->port_src), ((char *)odr_hdr)+hdr_len, payload_hdr->message_len, odr_hdr->sourceip);
 		break;
 	    }
 	    update_dest_map(odr_hdr->sourceip, src_mac, my_mac, socket_address.sll_ifindex, ++payload_hdr->hop, staleness);
@@ -556,14 +558,14 @@ int process_msg_cs(struct msg_send *msg_content, unsigned port)
     data_wrapper->data = malloc(data_len + 1);
     memcpy(data_wrapper->data, msg_content->msg, data_len + 1);
     data_wrapper->next = NULL;
-    payload_hdr->port_src = port;
-    payload_hdr->port_dest = msg_content->port;
+    payload_hdr->port_src = htons(port);
+    payload_hdr->port_dest = htons(msg_content->port);
     payload_hdr->hop = 0;
     payload_hdr->message_len = data_len + 1;
     dest_map = get_dest_entry(odr_hdr->destip, staleness);
     //Handle when src == dest
 	if(cononicalip == odr_hdr->destip) {	
-		writeToServer(payload_hdr->port_dest, payload_hdr->port_src, data_wrapper->data, data_len+1, odr_hdr->destip);
+		writeToServerClient(ntohs(payload_hdr->port_dest), ntohs(payload_hdr->port_src), data_wrapper->data, data_len+1, odr_hdr->destip);
 		free(data_wrapper->data);
 		free(data_wrapper);
 		return 0;
@@ -652,6 +654,7 @@ int main(int argc, char **argv)
 	    printdebuginfo(" Message from client/server %d, %d, %s, %s\n", msg_content.port, msg_content.flag, msg_content.msg, msg_content.ip);
 	    printdebuginfo(" Cli sun_name:%s\n", cliaddr.sun_path);
 	    port = update_ttl_ptable(cliaddr.sun_path);
+	    printf("Assigned port %u\n", htons(port));
 	    n = process_msg_cs(&msg_content, port);
 	    if(n < 0)
 		goto exit;
