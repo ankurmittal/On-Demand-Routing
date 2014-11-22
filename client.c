@@ -26,7 +26,6 @@ int main()
 	char *c = "c";
 	char vm[5], hostname[10], buffer[16], data[50];
 	struct hostent *ent;
-	int timeoutflag = 0;
 
 	gethostname(hostname, sizeof(hostname));
 	printf("My hostname: %s\n", hostname);
@@ -37,7 +36,7 @@ int main()
 	strcpy(cliaddr.sun_path, tmpnam(NULL));
 	Bind(sockfd, (SA *) &cliaddr, sizeof(cliaddr));
 
-	printf("\n%s\n", cliaddr.sun_path);
+	printdebuginfo("\n%s\n", cliaddr.sun_path);
 
 	//while (1) {
 	getInput(vm);
@@ -48,27 +47,19 @@ int main()
 	inet_ntop(PF_INET, ent->h_addr_list[0], buffer, sizeof(buffer));
 	printf("%s\n", buffer);
 	printf("\nclient at node %s sending request to server at %s\n", hostname, vm);
-sendmsg:
-	n = msg_send(sockfd, buffer, SERVER_PORT, c, timeoutflag);
+	n = msg_send(sockfd, buffer, SERVER_PORT, c, 0);
 	msg = msg_recv(sockfd, 1);
 	if(msg == NULL) {
-		timeoutflag = 1;
-		if(timeoutflag) {
-			n = msg_send(sockfd, buffer, SERVER_PORT, c, timeoutflag);
-			msg = msg_recv(sockfd, 1);
-			if(msg == NULL) {
-			    printf("timeout..!!\n");
-			    unlink(cliaddr.sun_path);
-			    exit(0);
-			}
+		printf("client at node %s: timeout on response from %s", hostname, vm);
+		n = msg_send(sockfd, buffer, SERVER_PORT, c, 1);
+		msg = msg_recv(sockfd, 1);
+		if(msg == NULL) {
+		    printf("timeout..!!\n");
+		    unlink(cliaddr.sun_path);
+		    exit(0);
 		}
-		goto sendmsg;
-	} else {
-	    timeoutflag = 0;
 	}
-	printf("Received Msg: %s\n", msg->msg);
-	printf("Received IP: %s\n", msg->ip);
-	printf("Received Port: %d\n", msg->port);
+	printf("client at node %s: received from %s <%s>\n", hostname, vm,  msg->msg);
 	//}
 
 	unlink(cliaddr.sun_path);
