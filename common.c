@@ -15,18 +15,12 @@ int msg_send(int sockfd, char *ip, unsigned int port, char *msg, short flag)
     msg_content.flag = flag;
 
     odraddr.sun_family = AF_LOCAL;
-    printf("ODR_PATH:%s\n", ODR_PATH);
+    printdebuginfo("ODR_PATH:%s\n", ODR_PATH);
     strcpy(odraddr.sun_path, ODR_PATH);
-    n = connect(sockfd, (SA *) &odraddr, sizeof(odraddr));
+    n = sendto(sockfd, &msg_content, sizeof(msg_content), 0, (SA *) &odraddr, sizeof(odraddr));
     if(n < 0)
     {
-	perror("Error connecting to ODR");
-	return n;
-    }
-    n = write(sockfd, &msg_content, sizeof(msg_content));
-    if(n < 0)
-    {
-	perror("Error writing to odr socket");
+	perror("Error writing to odr socket\n");
     }
     return n;
 }

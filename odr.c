@@ -49,7 +49,7 @@ int writeToServerClient(unsigned int port_dest, unsigned int port_src, char *buf
 
 	n = sendto(localfd, recvStruct, sizeof(struct msg_rec), 0, (SA *) &destaddr, sizeof(destaddr));
 	if(n < 0) {
-		perror("error writing..!!");
+		perror("Error writing to client/server");
 	}
 	free(recvStruct);
 	return n;
@@ -191,14 +191,14 @@ void recieveframe()
 	case TYPE_RREQ:
 	{
 	    struct rreq_hdr *rreq_hdr = &odr_hdr->hdr.rreq_hdr;
-	    struct dest_map *dest_entry;
+	    struct dest_map *dest_entry, *src_entry;
 	    printdebuginfo(" rreq recieved, hop:%d, rrep_sent:%d\n", rreq_hdr->hop, rreq_hdr->rrep_sent);
 	    if(cononicalip == odr_hdr->sourceip || update_rreq_map(odr_hdr->sourceip, rreq_hdr->broadcastid, rreq_hdr->hop, 1) == 0)
 	    {
 		printdebuginfo(" Duplicate rreq\n");
 		break;
 	    }
-	    update_dest_map(odr_hdr->sourceip, src_mac, my_mac, socket_address.sll_ifindex, ++rreq_hdr->hop, rreq_hdr->forceflag?0:staleness);
+	    src_entry = update_dest_map(odr_hdr->sourceip, src_mac, my_mac, socket_address.sll_ifindex, ++rreq_hdr->hop, rreq_hdr->forceflag?0:staleness);
 	    dest_entry = get_dest_entry(odr_hdr->destip, rreq_hdr->forceflag?0:staleness);
 	    if((dest_entry || odr_hdr->destip == cononicalip) && rreq_hdr->rrep_sent == 0)
 	    {
@@ -240,7 +240,7 @@ void recieveframe()
 		    my_mac, &rrep_odr_hdr, sizeof(struct odr_hdr), NULL, 0);
 		if(n < 0)
 		    goto exit;
-		if(odr_hdr->destip != cononicalip)
+		if(odr_hdr->destip != cononicalip && !src_entry)
 		{
 		    n = forwardrreq(odr_hdr, socket_address.sll_ifindex);
 		    if(n < 0)
@@ -248,7 +248,7 @@ void recieveframe()
 		}
 
 	    }
-	    else 
+	    else if(odr_hdr->destip != cononicalip) 
 	    {
 		n = forwardrreq(odr_hdr, socket_address.sll_ifindex);
 		if(n < 0)
@@ -313,7 +313,8 @@ void recieveframe()
 	    int hdr_len = sizeof(struct odr_hdr);
 	    struct msg_rec *recvStruct = NULL;
 
-		printdebuginfo(" payload recieved, hop:%d, data:%s\n", payload_hdr->hop, ((char *)odr_hdr)+ hdr_len);
+	    printdebuginfo(" payload recieved, hop:%d, data:%s\n", payload_hdr->hop, ((char *)odr_hdr)+ hdr_len);
+	    update_dest_map(odr_hdr->sourceip, src_mac, my_mac, socket_address.sll_ifindex, ++payload_hdr->hop, staleness);
 	    if(odr_hdr->destip == cononicalip)
 	    {
 		printdebuginfo("Recieved msg on odr, forward to server, %u\n", payload_hdr->port_dest);
@@ -321,7 +322,6 @@ void recieveframe()
 		writeToServerClient(ntohs(payload_hdr->port_dest), ntohs(payload_hdr->port_src), ((char *)odr_hdr)+hdr_len, payload_hdr->message_len, odr_hdr->sourceip);
 		break;
 	    }
-	    update_dest_map(odr_hdr->sourceip, src_mac, my_mac, socket_address.sll_ifindex, ++payload_hdr->hop, staleness);
 	    dest_entry = get_dest_entry(odr_hdr->destip, staleness);
 	    if(!dest_entry)
 	    {
@@ -612,7 +612,7 @@ int main(int argc, char **argv)
     }
     if(staleness < 0)
     {
-	printf("Staleness should be less than 0");
+	printf("Staleness should not be less than 0");
 	exit(1);
     }
 
@@ -654,16 +654,15 @@ int main(int argc, char **argv)
 	    printdebuginfo(" Message from client/server %d, %d, %s, %s\n", msg_content.port, msg_content.flag, msg_content.msg, msg_content.ip);
 	    printdebuginfo(" Cli sun_name:%s\n", cliaddr.sun_path);
 	    port = update_ttl_ptable(cliaddr.sun_path);
-	    printf("Assigned port %u\n", htons(port));
+	    //printf("Assigned port %u\n", htons(port));
 	    n = process_msg_cs(&msg_content, port);
 	    if(n < 0)
 		goto exit;
 	}
     }
-    //Listen(localfd, LISTENQ);
-    /*
-     */
 exit:
+    close(localfd);
+    close(framefd);
     free_interface_info();
 
 }
